@@ -13,8 +13,8 @@ wrangler.jsonc       konfiguracja workera (assets = ./site, domena simplecad.g2b
 ```
 
 ## Deploy (Cloudflare)
-Workers & Pages → Create → **Connect to Git** → repo `SimpleCad`, branch `main`. *Build command*: puste, *Deploy command*: `npx wrangler deploy`.
-Pole `name` w `wrangler.jsonc` (`simplecad`) musi być takie samo jak nazwa projektu w panelu. Domena `simplecad.g2b.pl` jest w `routes` (strefa g2b.pl musi być na tym samym koncie).
+Workers & Pages → Create → **Connect to Git** → repo `SimpleCad`, branch `main`, nazwa projektu `simple-cad`. *Build command*: puste, *Deploy command*: `npx wrangler deploy`.
+Pole `name` w `wrangler.jsonc` (`simple-cad`) musi być takie samo jak nazwa projektu w panelu. Domena `simplecad.g2b.pl` jest w `routes` (strefa g2b.pl musi być na tym samym koncie).
 Każdy push na `main` wdraża zmiany.
 
 ## Formularz kontaktowy („O programie”)
