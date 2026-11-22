@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SimpleCAD – rysowanie i wymiarowanie</title>
+<meta name="description" content="SimpleCAD – lekki edytor 2D do rysowania i wymiarowania rzutów, ścian i pomieszczeń. Działa w przeglądarce, eksport DXF, SVG, PDF.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234338ca'/%3E%3Cpath d='M7 24V8h18M7 24h18M13 24v-6M19 24V14' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{--ink:#111827;--mut:#6b7280;--bg:#eef0f6;--line:#dfe3ee;--ac:#4f46e5;--man:#e8590c;--tool:#1971c2}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font:14px system-ui,"Segoe UI",Roboto,sans-serif;color:var(--ink)}
+body{display:flex;flex-direction:column;background:var(--bg)}
+button,select,input,textarea{font:inherit;color:inherit}
+i.ic{display:inline-flex;width:18px;height:18px}
+i.ic svg{width:100%;height:100%;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+/* pasek górny (kompaktowy) */
+#top{display:flex;align-items:center;gap:8px;height:42px;padding:0 10px;background:linear-gradient(90deg,#1e1b4b,#312e81 55%,#4338ca);color:#fff;flex:none;position:relative;z-index:80}
+.ib{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;position:relative}
+.ib:hover{background:rgba(255,255,255,.22)}
+.ib i.ic{width:18px;height:18px}
+.brand{display:flex;align-items:center;gap:7px;font-weight:800;font-size:16px;letter-spacing:.3px;white-space:nowrap}
+.brand small{font-weight:600;font-size:10px;opacity:.65}
+.chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.09);color:#fff;cursor:pointer;font-weight:600;font-size:13px;max-width:300px}
+.chip:hover{background:rgba(255,255,255,.2)}
+.chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tn{font-size:12px;font-weight:700;color:#fde68a;background:rgba(0,0,0,.22);padding:5px 10px;border-radius:8px;white-space:nowrap}
+.sp{flex:1}
+[data-t]{position:relative}
+[data-t]:hover::after{content:attr(data-t);position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);background:#111827;color:#fff;font:500 11px system-ui,sans-serif;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:200;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+#bMenu[data-t]:hover::after{left:0;transform:none}
+/* menu hamburger */
+.menu{display:none;position:fixed;left:8px;top:46px;width:290px;background:#fff;color:var(--ink);border-radius:14px;box-shadow:0 12px 36px rgba(17,24,39,.3);padding:6px;z-index:120;max-height:calc(100vh - 60px);overflow:auto}
+.menu.open{display:block}
+.menu h5{margin:8px 10px 3px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.mi{display:flex;gap:10px;align-items:center;width:100%;text-align:left;padding:8px 10px;border:0;background:none;border-radius:8px;cursor:pointer;font-size:13.5px}
+.mi:hover{background:#eef2ff}
+.mi small{display:block;color:var(--mut);font-size:11px;line-height:1.25}
+.mi i.ic{color:var(--ac);flex:none}
+.menu hr{border:0;border-top:1px solid var(--line);margin:5px 4px}
+/* scena i wysuwany pasek narzędzi */
+#stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#rib{position:absolute;left:0;right:0;top:0;z-index:40;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;background:rgba(238,240,246,.97);backdrop-filter:blur(6px);border-bottom:1px solid #cfd5e6;box-shadow:0 8px 22px rgba(17,24,39,.18);transform:translateY(-115%);transition:transform .18s ease;pointer-events:none}
+#rib.show{transform:none;pointer-events:auto}
+#rib.dock{position:relative;transform:none;pointer-events:auto;box-shadow:none;flex:none}
+.pg{--g:#4f46e5;display:flex;align-items:center;gap:2px;padding:3px 4px;background:#fff;border:1px solid var(--line);border-bottom:3px solid var(--g);border-radius:10px}
+.bt{position:relative;display:grid;place-items:center;width:34px;height:32px;border:1px solid transparent;border-radius:8px;background:transparent;cursor:pointer;color:#374151}
+.bt i.ic{width:20px;height:20px}
+.bt:hover{background:color-mix(in srgb,var(--g) 13%,#fff);color:var(--g)}
+.bt.on{background:var(--g);color:#fff;box-shadow:0 2px 6px color-mix(in srgb,var(--g) 40%,transparent)}
+.bt.tg.on{background:color-mix(in srgb,var(--g) 15%,#fff);color:var(--g);border-color:var(--g);box-shadow:none}
+.bt .sw{width:20px;height:20px;border-radius:6px;border:2px solid #fff;box-shadow:0 0 0 1px #9ca3af;background:#000}
+.sl{font-size:12px;font-weight:600;padding:5px 4px;border:1px solid #cfd5e3;border-radius:7px;background:#fff;max-width:130px}
+.rpin{margin-left:auto;--g:#db2777}
+.rtab{position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:6px;height:22px;padding:0 14px;border:0;border-radius:0 0 12px 12px;background:#312e81;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(30,27,75,.35);opacity:.92}
+.rtab:hover{opacity:1;background:#4338ca}
+.rtab i.ic{width:14px;height:14px}
+.rtab.gone{display:none}
+#wrap{position:relative;flex:1;min-height:0;background:#fff}
+canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+#status{display:flex;gap:18px;padding:5px 12px;background:#1f2937;color:#e5e7eb;font-size:12.5px;white-space:nowrap;overflow:hidden;flex:none}
+#hint{flex:1;overflow:hidden;text-overflow:ellipsis}
+#coords{font-variant-numeric:tabular-nums;min-width:190px;text-align:right;color:#fbbf24}
+/* paleta */
+#pal{display:none;position:absolute;z-index:60;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(17,24,39,.25);padding:10px;width:216px}
+#pal.open{display:block}
+#pal h4{margin:0 0 8px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em}
+#pal .g{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+#pal .g button{width:28px;height:28px;border-radius:7px;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;cursor:pointer;padding:0}
+#pal .g button.cur{box-shadow:0 0 0 2px var(--ac)}
+/* dialogi */
+dialog{border:0;border-radius:16px;padding:0;box-shadow:0 20px 60px rgba(17,24,39,.4);width:min(600px,94vw);max-height:92vh;overflow:auto}
+dialog::backdrop{background:rgba(17,24,39,.45)}
+dialog form{display:flex;flex-direction:column}
+dialog h3{margin:0;padding:14px 18px;background:linear-gradient(90deg,#1e1b4b,#4338ca);color:#fff;font-size:16px;position:sticky;top:0;z-index:2}
+#db,#hb{padding:14px 18px;display:flex;flex-direction:column;gap:10px;font-size:13.5px;line-height:1.5}
+.f{display:flex;flex-direction:column;gap:3px}
+.f>span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--mut)}
+.f input,.f select,.f textarea{padding:7px 9px;border:1px solid #cbd2e1;border-radius:8px;background:#fff;width:100%}
+.f textarea{min-height:70px;resize:vertical}
+.f.chk{flex-direction:row;align-items:center;gap:8px}
+.f.chk>span{text-transform:none;font-size:13.5px;color:var(--ink);letter-spacing:0;font-weight:500}
+.f.chk input{width:auto}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tbrow{display:grid;grid-template-columns:1fr 1fr 32px;gap:6px}
+.tbrow input{padding:6px 8px;border:1px solid #cbd2e1;border-radius:8px}
+.xb{border:0;background:#fee2e2;color:#b91c1c;border-radius:8px;cursor:pointer;font-weight:700}
+.dbtn{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:#f8fafc;border-top:1px solid var(--line);position:sticky;bottom:0}
+.dbtn button{padding:8px 16px;border-radius:9px;border:1px solid #cbd2e1;background:#fff;cursor:pointer;font-weight:600}
+.dbtn button.pri{background:var(--ac);color:#fff;border-color:var(--ac)}
+.mini{padding:6px 10px;border-radius:8px;border:1px dashed #94a3b8;background:#f8fafc;cursor:pointer;font-weight:600;align-self:flex-start}
+.note{font-size:12px;color:var(--mut)}
+kbd{background:#eef0f3;border:1px solid #c9ced6;border-bottom-width:2px;border-radius:4px;padding:0 5px;font:12px ui-monospace,Consolas,monospace}
+#hb h4{margin:10px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--ac)}
+#hb h4:first-child{margin-top:0}
+#hb ul{margin:2px 0 0;padding-left:18px}
+#hb li{margin:2px 0}
+#hb table{border-collapse:collapse;width:100%;font-size:13px}
+#hb td{padding:3px 6px;border-bottom:1px solid #eef0f4;vertical-align:top}
+#hb td:first-child{white-space:nowrap;width:1%}
+#abt{width:min(560px,94vw)}
+#abt h3{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#abt .ax{border:0;background:rgba(255,255,255,.16);color:#fff;border-radius:8px;width:30px;height:30px;font-size:18px;line-height:1;cursor:pointer}
+#abt .ax:hover{background:rgba(255,255,255,.32)}
+#abt .abody{padding:14px 18px 6px;line-height:1.5;font-size:13.5px}
+#abt .abrand{display:flex;gap:12px;align-items:center;margin-bottom:6px}
+#abt .abrand svg{width:46px;height:46px;flex:none}
+#abt .abrand b{font-size:19px;letter-spacing:.2px}#abt .abrand span{color:var(--mut);font-size:12px;margin-left:6px}
+#abt .abrand p{margin:2px 0 0;color:#374151}
+#abt .alinks{margin:8px 0 4px}#abt a{color:#4338ca;font-weight:600}
+#abt .afrm{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+#abt .afrm h4{margin:0 0 6px;font-size:14px}
+#abt .afrm label{display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:#475467;margin-bottom:7px}
+#abt .afrm input,#abt .afrm textarea{padding:7px 9px;border:1px solid #cbd5e1;border-radius:8px;width:100%}
+#abt .afrm textarea{min-height:92px;resize:vertical}
+#abt .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+#abt .cap{min-height:4px;margin:2px 0 6px}
+#abt .ams{min-height:18px;font-size:12.5px;margin:4px 0}#abt .ams.err{color:#b42318}#abt .ams.ok{color:#047857;font-weight:600}
+#abt .mailrow{margin:8px 0 2px;font-size:13px}
+#abt .note{font-size:11.5px;color:var(--mut)}
+.copy{padding:10px 18px;text-align:center;font-weight:700;color:#4338ca;background:#eef2ff;border-top:1px solid var(--line)}
+#printRoot{display:none}
+@media print{html,body{height:auto!important;background:#fff!important;display:block!important}body>*:not(#printRoot){display:none!important}#printRoot{display:block!important}}
+</style>
+</head>
+<body>
+<div id="top">
+  <button class="ib" id="bMenu" data-t="Menu"><i class="ic" data-i="menu"></i></button>
+  <div class="brand"><i class="ic" data-i="logo" style="width:22px;height:22px"></i>SimpleCAD<small>v0.7</small></div>
+  <button class="chip" id="projName" title="Opis projektu i tabelka rysunkowa"><i class="ic" data-i="proj"></i><span id="pn">Nowy projekt</span></button>
+  <span class="tn" id="toolName">Linia</span>
+  <div class="sp"></div>
+  <button class="ib" id="bCat" data-t="Katalog obiektów: cegły, klinkier, okna, drzwi (K)"><i class="ic" data-i="cat"></i></button>
+  <button class="ib" id="bUndo" data-t="Cofnij (Ctrl+Z)"><i class="ic" data-i="undo"></i></button>
+  <button class="ib" id="bRedo" data-t="Ponów (Ctrl+Y)"><i class="ic" data-i="redo"></i></button>
+  <button class="ib" id="bFit" data-t="Dopasuj widok (Home)"><i class="ic" data-i="fit"></i></button>
+</div>
+
+<div class="menu" id="hmenu">
+  <h5>Plik</h5>
+  <button class="mi" id="bNew"><i class="ic" data-i="new"></i><span>Nowy rysunek</span></button>
+  <button class="mi" id="bExample"><i class="ic" data-i="cat"></i><span>Rysunek przykładowy<small>gotowy rysunek do oglądania i edycji</small></span></button>
+  <label class="mi"><i class="ic" data-i="open"></i><span>Otwórz plik JSON</span><input type="file" id="bLoad" accept=".json,application/json" hidden></label>
+  <button class="mi" id="bSave"><i class="ic" data-i="save"></i><span>Zapisz JSON<small>pełna kopia projektu do ponownej edycji</small></span></button>
+  <hr><h5>Eksport</h5>
+  <button class="mi" id="xDxf"><i class="ic" data-i="cad"></i><span>DXF (CAD)<small>AutoCAD, BricsCAD, LibreCAD…</small></span></button>
+  <button class="mi" id="xSvg"><i class="ic" data-i="vec"></i><span>SVG (wektor)<small>skalowalny, do dalszej obróbki</small></span></button>
+  <button class="mi" id="xPng"><i class="ic" data-i="img"></i><span>PNG<small>obraz rastrowy</small></span></button>
+  <button class="mi" id="xPrint"><i class="ic" data-i="print"></i><span>Drukuj / zapisz jako PDF<small>Ctrl+P · wektorowo, okno druku przeglądarki</small></span></button>
+  <button class="mi" id="xPdf"><i class="ic" data-i="pdf"></i><span>Pobierz PDF (plik)<small>bez okna druku, obraz 200 dpi</small></span></button>
+  <hr><h5>Projekt</h5>
+  <button class="mi" id="bProj"><i class="ic" data-i="proj"></i><span>Opis projektu i tabelka</span></button>
+  <button class="mi" id="bMarg"><i class="ic" data-i="marg"></i><span>Marginesy druku</span></button>
+  <button class="mi" id="bHelp"><i class="ic" data-i="help"></i><span>Pomoc i skróty</span></button>
+  <button class="mi" id="bAbout"><i class="ic" data-i="help"></i><span>O programie<small>autor, kontakt, wersja</small></span></button>
+</div>
+
+<div id="stage">
+  <div id="rib">
+    <div class="pg" style="--g:#4f46e5">
+      <button class="bt" id="tSel" data-t="Zaznacz / edytuj (V)"><i class="ic" data-i="sel"></i></button>
+      <button class="bt on" id="tLine" data-t="Rysuj linię (L)"><i class="ic" data-i="line"></i></button>
+      <button class="bt" id="tDim" data-t="Wymiaruj (D)"><i class="ic" data-i="dim"></i></button>
+      <button class="bt" id="tText" data-t="Pole tekstowe (T)"><i class="ic" data-i="text"></i></button>
+      <button class="bt" id="tArea" data-t="Oznacz obszar (A)"><i class="ic" data-i="area"></i></button>
+      <select class="sl" id="dimMode" title="Rodzaj wymiaru (Tab)"><option value="auto">Auto 90°</option><option value="a">Wzdłuż</option><option value="h">Poziomy</option><option value="v">Pionowy</option></select>
+    </div>
+    <div class="pg" style="--g:#0d9488">
+      <button class="bt tg on" id="cOrtho" data-t="Kąt 90° (O)"><i class="ic" data-i="ortho"></i></button>
+      <button class="bt tg on" id="cSnapL" data-t="Przyciąganie do linii i punktów"><i class="ic" data-i="magnet"></i></button>
+      <button class="bt tg on" id="cSnapO" data-t="Przyciąganie do elementów i obiektów (E)"><i class="ic" data-i="snapo"></i></button>
+      <button class="bt tg on" id="cSnapG" data-t="Przyciąganie do siatki (G)"><i class="ic" data-i="grid"></i></button>
+      <select class="sl" id="snapStep" title="Krok siatki"><option value="10">10 mm</option><option value="50">50 mm</option><option value="100" selected>100 mm</option><option value="500">500 mm</option><option value="1000">1000 mm</option></select>
+      <button class="bt tg on" id="cGrid" data-t="Pokaż siatkę"><i class="ic" data-i="eye"></i></button>
+      <button class="bt tg on" id="cDims" data-t="Pokaż wymiary"><i class="ic" data-i="dimv"></i></button>
+    </div>
+    <div class="pg" style="--g:#64748b">
+      <button class="bt" id="bAll" data-t="Zaznacz cały rysunek (Ctrl+A)"><i class="ic" data-i="all"></i></button>
+      <button class="bt" id="bRot" data-t="Obróć zaznaczony obiekt o 90° (R, Shift+R – w lewo)"><i class="ic" data-i="rot"></i></button>
+      <button class="bt" id="bDel" data-t="Usuń zaznaczone (Del)"><i class="ic" data-i="trash"></i></button>
+      <button class="bt" id="bColor" data-t="Kolor linii (24)"><span class="sw" id="colSw"></span></button>
+      <button class="bt" id="bOut" data-t="Wymiary po zewnętrznej stronie"><i class="ic" data-i="out"></i></button>
+    </div>
+    <div class="pg" style="--g:#9333ea">
+      <select class="sl" id="fFmt" title="Format arkusza"><option value="free">Swobodny</option><option>A4</option><option>A3</option><option>A2</option><option>A1</option><option>A0</option></select>
+      <select class="sl" id="fOri" title="Układ kartki"><option value="auto">Układ: auto</option><option value="land">Pozioma</option><option value="port">Pionowa</option></select>
+      <select class="sl" id="fScl" title="Skala rysunku"><option value="auto">Skala: auto</option><option value="1">1:1</option><option value="2">1:2</option><option value="5">1:5</option><option value="10">1:10</option><option value="20">1:20</option><option value="25">1:25</option><option value="50">1:50</option><option value="100">1:100</option><option value="200">1:200</option><option value="500">1:500</option><option value="max">Maksymalna</option><option value="custom">Własna 1:…</option></select><input class="sl" id="fSclV" type="number" min="0.01" step="any" placeholder="1:" title="Skala 1:XX – wpisz wartość i Enter" style="width:72px;display:none">
+      <button class="bt tg on" id="cTb" data-t="Tabelka rysunkowa"><i class="ic" data-i="table"></i></button>
+      <button class="bt" id="bMarg2" data-t="Marginesy druku"><i class="ic" data-i="marg"></i></button>
+      <button class="bt tg" id="cFrame" data-t="Ramka na wydruku"><i class="ic" data-i="frame"></i></button>
+      <button class="bt" id="bMax" data-t="Maksymalne powiększenie rysunku na arkuszu"><i class="ic" data-i="max"></i></button>
+      <button class="bt" id="bLay" data-t="Wyśrodkuj rysunek na arkuszu"><i class="ic" data-i="center"></i></button>
+    </div>
+    <div class="pg rpin"><button class="bt tg" id="bPin" data-t="Przypnij pasek (nie chowaj)"><i class="ic" data-i="pin"></i></button></div>
+  </div>
+  <button class="rtab" id="rtab"><i class="ic" data-i="down"></i><span>Narzędzia</span></button>
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+    <div id="pal"><h4>Kolor linii (24)</h4><div class="g" id="palg"></div></div>
+  </div>
+</div>
+<div id="status"><span id="hint"></span><span id="coords"></span></div>
+
+<dialog id="dlg"><form onsubmit="return false"><h3 id="dt"></h3><div id="db"></div>
+  <div class="dbtn"><button type="button" id="dcancel">Anuluj</button><button type="button" class="pri" id="dok">OK</button></div></form></dialog>
+
+<dialog id="abt"><form onsubmit="return false">
+<h3><span>O programie</span><button type="button" class="ax" id="aX" aria-label="Zamknij">✕</button></h3>
+<div class="abody">
+  <div class="abrand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#4338ca"/><path d="M7 24V8h18M7 24h18M13 24v-6M19 24V14" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>
+    <div><b>SimpleCAD</b><span id="abver"></span><p>Lekkie narzędzie do rysowania i wymiarowania rzutów, ścian i pomieszczeń – w przeglądarce, bez instalacji. Eksport DXF, SVG, PNG i PDF, katalog elementów murowych, wydruk w skali.</p></div></div>
+  <p class="alinks">Autor i wydawca: <a href="https://g2b.pl" target="_blank" rel="noopener">g2b.pl</a> · <a href="https://g2b.pl/projects.html" target="_blank" rel="noopener">inne projekty</a> · <a href="https://groundcad.g2b.pl" target="_blank" rel="noopener">GroundCAD</a></p>
+</div>
+<div class="copy">© Copyright Patryk Gust | 2026</div>
+<div class="abody"><div class="afrm">
+  <h4>Napisz do autora</h4>
+  <p class="mailrow">E-mail: <a href="#" id="aMail" rel="nofollow">pokaż adres</a> <noscript>(wymaga JavaScript)</noscript></p>
+  <label>Imię (opcjonalnie)<input id="aN" type="text" maxlength="120" autocomplete="name"></label>
+  <label>Twój e-mail<input id="aE" type="email" maxlength="200" autocomplete="email"></label>
+  <label>Temat<input id="aS" type="text" maxlength="140"></label>
+  <label>Wiadomość<textarea id="aM" maxlength="5000"></textarea></label>
+  <input id="aH" class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+  <div class="cap" id="aCap"></div>
+  <div class="ams" id="aSt" role="status"></div>
+  <p class="note" id="aNote">Wiadomość trafia przez formularz kontaktowy g2b.pl. Podany adres posłuży wyłącznie do odpowiedzi.</p>
+</div></div>
+<div class="dbtn"><button type="button" id="aSend" class="pri">Wyślij</button><button type="button" id="aClose">Zamknij</button></div></form></dialog>
+
+<dialog id="hlp"><form onsubmit="return false"><h3>SimpleCAD – pomoc i skróty</h3><div id="hb">
+  <h4>Interfejs</h4>
+  <ul>
+    <li><b>Menu ☰</b> (lewy górny róg): plik (nowy, otwórz, zapisz JSON), eksport (DXF, SVG, PNG, druk/PDF), projekt, marginesy, pomoc.</li>
+    <li><b>Pasek narzędzi</b> chowa się pod górną belką. Najedź na zakładkę „Narzędzia” u góry płótna, aby go wysunąć; wysunięcie nie przesuwa rysunku. Po zjechaniu myszą chowa się sam.</li>
+    <li><b>Pinezka</b> (prawy koniec paska) przypina pasek na stałe. Rysunek zostaje wtedy w tym samym miejscu na ekranie. Ponowne kliknięcie odpina.</li>
+    <li>Najedź na ikonę, aby zobaczyć jej nazwę. U góry są też Cofnij, Ponów i Dopasuj widok.</li>
+    <li><b>Przyciąganie do elementów</b> (ikona w grupie przyciągania, <kbd>E</kbd>): oprócz siatki i linii rysunku przyciąga do narożników i krawędzi obiektów z katalogu, także pojedynczych cegieł w układzie. Pierwszeństwo: punkty (narożniki) → krawędzie → osie → siatka.</li>
+  </ul>
+  <h4>Rysowanie linii (L)</h4>
+  <ul>
+    <li>Klik = punkt, kolejne kliki dokładają odcinki. Domyślnie kąt 90° (przycisk lub <kbd>O</kbd>); <kbd>Shift</kbd> chwilowo odwraca tryb.</li>
+    <li>Wpisz liczbę (mm) i <kbd>Enter</kbd> – długość ręczna; kierunek wynika z położenia myszy. Wymiar ręczny jest pomarańczowy.</li>
+    <li>Koniec ciągu: <kbd>Esc</kbd>, dwuklik lub <b>prawy klik – kończy rysowanie i przełącza na „Zaznacz”</b> (tak samo w każdym narzędziu); domknięcie obrysu kończy ciąg samo.</li>
+  </ul>
+  <h4>Przyciąganie</h4>
+  <ul><li>Kolejność: koniec odcinka → punkt na linii / przecięcie → oś istniejącego punktu → siatka (jeśli włączona, <kbd>G</kbd>). Krok siatki wybierasz na pasku.</li></ul>
+  <h4>Wymiarowanie (D)</h4>
+  <ul>
+    <li>Punkt 1, punkt 2, potem klik ustawia położenie linii wymiarowej. <b>Domyślnie wymiar jest liniowy pod 90°</b> (poziomy lub pionowy – wybierany wg kursora); <kbd>Shift</kbd> daje swobodny wymiar wzdłuż dowolnego kierunku. Można też wymusić rodzaj na liście (Wzdłuż / Poziomy / Pionowy), <kbd>Tab</kbd> przełącza.</li>
+    <li>Kolory: <b>pomarańczowy</b> – długość wpisana ręcznie, <b>niebieski</b> – zmierzona narzędziem lub automatyczna po rozciągnięciu.</li>
+    <li>Wg PN-EN ISO 129: gdy liczba się nie mieści lub koliduje z rysunkiem lub z inną wartością, trafia poza linie pomocnicze (wartości nigdy nie nachodzą na siebie – program układa je od nowa dla każdego widoku i wydruku); gdy linia wymiarowa przecina rysunek – wartość jest w polu z linią odniesienia.</li>
+  </ul>
+  <h4>Edycja (V)</h4>
+  <ul>
+    <li>Przeciągnij kwadracik wierzchołka lub cały odcinek (w trybie 90° ruch jest prostopadły, więc kąty zostają proste). Dotknięte wymiary przeliczają się i stają się automatyczne.</li>
+    <li><kbd>Enter</kbd> lub dwuklik na odcinku – nowa długość ręczna. <kbd>F</kbd> – druga strona wymiaru, <kbd>M</kbd> – rodzaj wymiaru odcinka, <kbd>Del</kbd> – usuń.</li>
+    <li><b>Kolor</b>: ikona palety (24 kolory) zmienia zaznaczony element i kolor kolejnych linii.</li>
+  </ul>
+  <h4>Wypełnienia obszarów</h4>
+  <ul>
+    <li>Narzędzie Obszar (A): oprócz przestrzeni i ścian są wypełnienia materiałowe: <b>pustak / cegła ceramiczna</b>, <b>beton komórkowy</b>, <b>żelbet</b>, beton niezbrojony, <b>podsypka żwirowo-piaskowa</b>, <b>izolacja termiczna</b> oraz <b>trawa, ziemia, piasek, glina, roślinność, żwir</b> (z kolorem tła). Opcjonalna nazwa wyświetla się jako podpis.</li>
+    <li>Wypełnienia wchodzą do wydruku, PDF, SVG i PNG; w DXF eksportowane są wzory liniowe (ceramika, beton komórkowy, żelbet, izolacja, beton) – wzory kropkowane i zieleń nie.</li>
+  </ul>
+  <h4>Obszary i tekst</h4>
+  <ul>
+    <li><b>Obszar (A)</b>: klik w zamknięty kontur → przestrzeń (nazwa + m²), ściana zewnętrzna lub działowa (kreskowanie). Dwuklik na obszarze edytuje.</li>
+    <li><b>Tekst (T)</b>: klik w miejsce → treść, wysokość liter, pogrubienie, ramka. Przesuwasz przeciąganiem, edytujesz dwuklikiem.</li>
+  </ul>
+  <h4>O programie i rysunek przykładowy</h4>
+  <ul>
+    <li><b>Menu ☰ → Rysunek przykładowy</b> wczytuje gotowy rysunek (rzut z wymiarami, murami i pomieszczeniami) – do obejrzenia i dowolnej edycji; Ctrl+Z cofa wczytanie.</li>
+    <li><b>Menu ☰ → O programie</b>: informacje o autorze, linki oraz formularz kontaktowy (wymaga połączenia z internetem). Adres e-mail pokazuje się po kliknięciu – to ochrona przed robotami spamującymi.</li>
+  </ul>
+  <h4>Katalog obiektów (K)</h4>
+  <ul>
+    <li>Ikona katalogu w górnej belce (lub <kbd>K</kbd>) otwiera <b>pływające okno</b> – można je przeciągać za belkę i zmieniać jego rozmiar. Wyszukiwarka filtruje po nazwie i wymiarach (np. „klinkier”, „250”, „120x65”); kategorie: cegły, klinkier, okładziny, bloczki / pustaki, kostka, okna, drzwi.</li>
+    <li>Każdy element ma <b>rysunek techniczny z wymiarami</b> (rzut: dł. × szer.; elewacja: dł. × wys.) oraz informację o źródle wymiaru. Wymiary są <b>nominalne</b> – producenci się różnią, więc przed zakupem sprawdź kartę produktu. Własny element dodasz przyciskiem „+ własny element”.</li>
+    <li><b>Zaprawa:</b> spoina w rzędzie, spoina między rzędami, zaprawa na wybranych krawędziach zewnętrznych (góra / prawa / dół / lewa) i wiązanie (co drugi rząd przesunięty o ½, cięte połówki na brzegach). Podgląd układu z wymiarami całkowitymi aktualizuje się na bieżąco.</li>
+    <li><b>Kalkulator:</b> podaj długość (i wysokość) ściany – zobaczysz, ile elementów się mieści (np. 9,5), oraz jaka spoina potrzebna, by wyszło np. dokładnie 10 całych. Przycisk „Użyj” wpisuje liczbę elementów i spoinę do parametrów. Pokazuje też liczbę sztuk (+5%), szt./m² i objętość zaprawy.</li>
+    <li><b>Wstaw na rysunek:</b> klik stawia obiekt; narożniki przyciągają się do punktów rysunku i do innych obiektów; <kbd>R</kbd> – obrót o 90° (też przycisk ↻ w pasku narzędzi); „Część elementu” = ½ / ¾ / ¼ długości (połówki do układania na zakładkę); okna i drzwi same ustawiają się wzdłuż najbliższej linii ściany (<kbd>F</kbd> – strona zawiasów, <kbd>X</kbd> – kierunek otwierania); <kbd>Esc</kbd> – koniec.</li>
+    <li>Wstawiony obiekt: zaznacz (V) i przeciągaj, <kbd>R</kbd> obraca, <kbd>Del</kbd> usuwa, dwuklik / <kbd>Enter</kbd> – edycja (ilości, spoiny, krawędzie, obrót). Do narożników obiektów przyciąga też narzędzie wymiarowania. „Zestawienie” w oknie katalogu liczy elementy i zaprawę dla całego rysunku. Obiekty trafiają do wydruku, SVG, PNG i na warstwę OBIEKTY w DXF.</li>
+  </ul>
+  <h4>Arkusz, marginesy, tabelka</h4>
+  <ul>
+    <li>Format A4–A0 pokazuje kartkę z ramką marginesów i wyśrodkowuje rysunek w najmniejszej skali, w której się mieści. „Wyśrodkuj” przelicza układ po zmianach.</li>
+    <li><b>Ramka na wydruku</b>: marginesy są niewidoczne na wydruku (na ekranie pokazuje je niebieska linia przerywana). Ikona „Ramka" (lub Marginesy druku) włącza ramkę o zadanej grubości, domyślnie 1 px.</li>
+    <li><b>Skala</b>: lista (1:1 … 1:500), „Maksymalna” (największe powiększenie mieszczące się w polu rysunku – najlepsza czytelność wymiarów) lub „Własna 1:…” – wpisz dowolną wartość, np. 37,5, i Enter.</li>
+    <li><b>Zaznacz cały rysunek</b> (ikona lub <kbd>Ctrl</kbd>+<kbd>A</kbd>, narzędzie Zaznacz): przeciągnij, aby ustawić położenie na kartce; uchwyt w prawym dolnym rogu zmienia skalę; strzałki przesuwają o 1 mm kartki (Shift – 5 mm); Enter – okno z wartościami liczbowymi. „Wyśrodkuj” przywraca środek.</li>
+    <li><b>Drukowanie</b>: <kbd>Ctrl</kbd>+<kbd>P</kbd> (lub Menu → Drukuj) drukuje zawartość płótna na wybranym formacie. Gdy format jest swobodny, program dobiera najmniejszy pasujący A4–A0.</li>
+    <li><b>Marginesy</b> ustawiasz osobno dla każdej krawędzi (menu → Marginesy druku). Przeglądarka nie udostępnia marginesów drukarki, więc wpisuje się je ręcznie (są też gotowe wzory). W oknie druku wybierz „Marginesy: brak” i skalę 100%.</li>
+    <li><b>Tabelka rysunkowa</b>: pola ustawiasz w Projekt → Opis projektu i tabelka. Po zatwierdzeniu wstawia się jako obiekt na arkuszu: kliknij ją, a pojawi się uchwyt w lewym górnym rogu – przeciągnij, by zmniejszyć lub zwiększyć (też <kbd>+</kbd> / <kbd>−</kbd>). Dwuklik edytuje pola, <kbd>Del</kbd> ją ukrywa. W wartościach działają znaczniki {skala}, {data}, {format}.</li>
+  </ul>
+  <h4>Eksport</h4>
+  <ul><li>DXF (warstwy: LINIE, WYMIARY, KRESKOWANIE, PRZESTRZENIE, OPISY), SVG, PNG, wektorowy wydruk / PDF przez okno druku oraz bezpośredni plik PDF. Rysunek zapisuje się też automatycznie w przeglądarce.</li></ul>
+  <h4>Skróty</h4>
+  <table>
+    <tr><td><kbd>V</kbd> <kbd>L</kbd> <kbd>D</kbd> <kbd>T</kbd> <kbd>A</kbd></td><td>zaznacz, linia, wymiar, tekst, obszar</td></tr>
+    <tr><td><kbd>O</kbd> / <kbd>G</kbd></td><td>kąt 90° / przyciąganie do siatki</td></tr>
+    <tr><td><kbd>Shift</kbd></td><td>chwilowo odwraca tryb 90° (linia i wymiar)</td></tr>
+    <tr><td><kbd>Esc</kbd> <kbd>Del</kbd></td><td>anuluj / usuń zaznaczone</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>cofnij / ponów</td></tr>
+    <tr><td><kbd>Home</kbd></td><td>dopasuj widok</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>zaznacz cały rysunek (przesuwanie, skala)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>drukuj zawartość płótna</td></tr>
+    <tr><td><kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd></td><td>przesuwanie zaznaczonego rysunku na kartce</td></tr>
+    <tr><td>Kółko, <kbd>Spacja</kbd>+przeciąganie</td><td>zoom, przesuwanie widoku (też środkowy przycisk myszy)</td></tr>
+  </table>
+  <p class="note">Jednostki: milimetry.</p>
+  </div>
+  <div class="copy">© Copyright Patryk Gust | 2026</div>
+  <div class="dbtn"><button type="button" class="pri" id="hclose">Zamknij</button></div></form></dialog>
+<div id="printRoot"></div><style id="printStyle"></style>
+<script>

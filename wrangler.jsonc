@@ -1,0 +1,9 @@
+{
+  // Cloudflare Workers (Static Assets) – serwuje ./site. "name" MUSI być taki sam jak nazwa projektu/workera w panelu Cloudflare.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "simplecad",
+  "compatibility_date": "2025-06-01",
+  "assets": { "directory": "./site" },
+  // Domena własna – wrangler dodaje ją przy deployu (strefa g2b.pl musi być na tym samym koncie Cloudflare).
+  "routes": [{ "pattern": "simplecad.g2b.pl", "custom_domain": true }]
+}
