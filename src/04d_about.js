@@ -5,7 +5,7 @@
    ===================================================================== */
 const APP_VERSION = '0.7';
 const ABOUT = {
-  mailEndpoint: 'https://mail.g2b.pl/',            // ten sam worker, który obsługuje formularz na g2b.pl
+  mailEndpoint: 'https://mail.g2b.workers.dev/',            // ten sam worker, który obsługuje formularz na g2b.pl
   turnstileSiteKey: '0x4AAAAAAGER2WSTQmztaybD',     // klucz publiczny widżetu (jak na g2b.pl); domena musi być dodana w widżecie
   exampleUrl: 'example.json',
   mail: { u: ['simple', 'cad'], d: ['g2b', 'pl'] }  // składane w locie
