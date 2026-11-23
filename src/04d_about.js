@@ -49,9 +49,10 @@ function aboutSend() {
     .then(r => r.json().catch(() => ({})).then(j => { if (!r.ok || !j.ok) throw new Error(j.error || r.status); }))
     .then(() => { aboutSetStatus('Dziękuję! Wiadomość została wysłana – odpowiem na podany adres.', 'ok'); $('aS').value = ''; $('aM').value = ''; })
     .catch(err => {
-      const c = String(err && err.message); $('aSend').disabled = false; tsToken = ''; if (window.turnstile && tsWidget !== null) { try { window.turnstile.reset(tsWidget); } catch (_) { } }
+      const c = String(err && err.message), net = err instanceof TypeError; // TypeError = brak połączenia albo odpowiedź zablokowana przez CORS (domena spoza ALLOWED_ORIGIN) $('aSend').disabled = false; tsToken = ''; if (window.turnstile && tsWidget !== null) { try { window.turnstile.reset(tsWidget); } catch (_) { } }
       aboutSetStatus(c === 'captcha' ? 'Weryfikacja antyspamowa nie powiodła się – spróbuj ponownie.' : c === 'rate' ? 'Dziś wysłano już zbyt wiele wiadomości z Twojego adresu – spróbuj jutro.'
-        : c === 'forbidden' ? 'Formularz nie jest jeszcze dostępny z tej domeny – napisz bezpośrednio na adres e-mail.' : 'Nie udało się wysłać wiadomości – spróbuj ponownie lub napisz bezpośrednio na adres e-mail.', 'err');
+        : c === 'forbidden' || net ? 'Nie udało się połączyć z serwerem formularza (brak internetu lub domena nie jest jeszcze dopuszczona) – napisz bezpośrednio na adres e-mail. [' + (net ? 'sieć/CORS' : c) + ']'
+        : 'Nie udało się wysłać wiadomości – spróbuj ponownie lub napisz bezpośrednio na adres e-mail. [' + c + ']', 'err');
     });
 }
 (function () { // powiązania
@@ -65,6 +66,9 @@ function aboutSend() {
   $('abt').addEventListener('mousedown', e => { if (e.target === $('abt')) $('abt').close(); });
   $('aSend').onclick = aboutSend; $('abt').querySelector('form').addEventListener('submit', e => { e.preventDefault(); });
 })();
+
+/* podpowiedzi (title) z opisów pozycji menu – opisy są ukryte dla zmniejszenia wysokości menu */
+document.querySelectorAll('#hmenu .mi small').forEach(s => { const b = s.closest('.mi'); b.title = s.previousSibling && s.previousSibling.textContent ? s.previousSibling.textContent + ' – ' + s.textContent : s.textContent; });
 
 /* ---------- rysunek przykładowy ---------- */
 function loadExampleDoc(d) {
