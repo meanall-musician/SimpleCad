@@ -341,7 +341,7 @@ function migrate(d) {
 
 let S = newDoc();
 let view = { s: 0.1, ox: 80, oy: 80 };
-const ui = { tool: 'line', ortho: true, snapL: true, snapG: true, step: 100, grid: true, showDims: true, dimMode: 'auto', color: '#000000', pinned: false, snapO: true };
+const ui = { tool: 'line', ortho: true, snapL: true, snapG: true, step: 100, grid: true, showDims: true, dimMode: 'auto', color: '#000000', pinned: true, pinV: 2, snapO: true };
 const st = { start: null, chainStart: null, buf: '', mouse: { x: 0, y: 0 }, w: { x: 0, y: 0 }, shift: false, space: false,
              pan: null, dimP1: null, dimP2: null, dimEff: 'a', sel: null, drag: null, hoverFace: null, snap: null, place: null };
 let W = 800, H = 600, dpr = 1, raf = 0, hist = [], redo = [];
@@ -1066,8 +1066,8 @@ function objBox(o) {
   const je = o.je || {}, cw = o.l * (o.part || 1), ch = o.view === 'elev' ? o.h : o.w;
   return { cw, ch, bw: o.nx * cw + (o.nx - 1) * o.jx + (je.l || 0) + (je.r || 0), bh: o.ny * ch + (o.ny - 1) * o.jy + (je.t || 0) + (je.b || 0) };
 }
-function objXf(o) { const c = Math.cos((o.rot || 0) * D2R), s = Math.sin((o.rot || 0) * D2R); return (lx, ly) => [o.x + lx * c - ly * s, o.y + lx * s + ly * c]; }
-function objInv(o, p) { const c = Math.cos((o.rot || 0) * D2R), s = Math.sin((o.rot || 0) * D2R), dx = p.x - o.x, dy = p.y - o.y; return { x: dx * c + dy * s, y: -dx * s + dy * c }; }
+function objXf(o) { const c = Math.cos((o.rot || 0) * D2R), s = Math.sin((o.rot || 0) * D2R), k = o.sc || 1; return (lx, ly) => { lx *= k; ly *= k; return [o.x + lx * c - ly * s, o.y + lx * s + ly * c]; }; }
+function objInv(o, p) { const c = Math.cos((o.rot || 0) * D2R), s = Math.sin((o.rot || 0) * D2R), k = o.sc || 1, dx = p.x - o.x, dy = p.y - o.y; return { x: (dx * c + dy * s) / k, y: (-dx * s + dy * c) / k }; }
 function objCorners(o) {
   const B = objBox(o), T = objXf(o), q = T, r = [[0, 0], [B.bw, 0], [B.bw, B.bh], [0, B.bh]].map(p => q(p[0], p[1]));
   const je = o.je;
@@ -1100,7 +1100,7 @@ function objGeom(o) {
     g.push({ t: 'line', pts: poly([[0, 0], [B.bw, 0], [B.bw, B.bh], [0, B.bh]]), closed: true, c: '#222', w: 1.2 });
   } else {
     const w = o.w, t = o.t, win = o.type === 'okno';
-    g.push({ t: 'mask', poly: rect(0, 0, w, t) });
+    if (o.cut) g.push({ t: 'mask', poly: rect(0, 0, w, t) });
     g.push({ t: 'line', pts: poly([[0, 0], [0, t]]), c: '#111', w: 1.8 }, { t: 'line', pts: poly([[w, 0], [w, t]]), c: '#111', w: 1.8 });
     if (win) {
       g.push({ t: 'line', pts: poly([[0, 0], [w, 0]]), c: '#111', w: 1 }, { t: 'line', pts: poly([[0, t], [w, t]]), c: '#111', w: 1 },
@@ -1123,11 +1123,12 @@ function drawObj(o, opt) {
   for (const it of objGeom(o)) {
     if (it.t === 'mask') { ctx.beginPath(); tr(it.poly, true); ctx.fillStyle = '#fff'; ctx.fill(); }
     else if (it.t === 'poly') {
-      ctx.beginPath(); for (const p of it.polys) tr(p, true); if (it.fill) { ctx.fillStyle = it.fill; ctx.fill(); }
-      if (it.stroke && it.min * view.s >= 4) { ctx.strokeStyle = it.stroke; ctx.lineWidth = it.w || 1; ctx.stroke(); }
+      ctx.beginPath(); for (const p of it.polys) tr(p, true); if (it.fill) { ctx.save(); ctx.globalAlpha *= 0.45; ctx.fillStyle = it.fill; ctx.fill(); ctx.restore(); }
+      if (it.stroke && it.min * (o.sc || 1) * view.s >= 4) { ctx.strokeStyle = it.stroke; ctx.lineWidth = it.w || 1; ctx.stroke(); }
     } else { ctx.beginPath(); tr(it.pts, it.closed); ctx.strokeStyle = it.c; ctx.lineWidth = it.w; ctx.stroke(); }
   }
-  if (opt.sel) { const B = objBox(o), T = objXf(o); ctx.beginPath(); tr([[0, 0], [B.bw, 0], [B.bw, B.bh], [0, B.bh]].map(p => T(p[0], p[1])), true); ctx.strokeStyle = C.sel; ctx.lineWidth = 2.5; ctx.stroke(); }
+  if (opt.sel) { const B = objBox(o), T = objXf(o); ctx.beginPath(); tr([[0, 0], [B.bw, 0], [B.bw, B.bh], [0, B.bh]].map(p => T(p[0], p[1])), true); ctx.strokeStyle = C.sel; ctx.lineWidth = 2.5; ctx.stroke();
+    const hp = T(B.bw, B.bh); ctx.fillStyle = '#fff'; ctx.lineWidth = 1.5; ctx.fillRect(X(hp[0]) - 6, Y(hp[1]) - 6, 12, 12); ctx.strokeRect(X(hp[0]) - 6, Y(hp[1]) - 6, 12, 12); }
   ctx.restore();
 }
 function drawObjs(clean) { for (const o of S.objs) drawObj(o, { sel: !clean && st.sel && st.sel.t === 'obj' && st.sel.id === o.id }); }
@@ -1153,7 +1154,11 @@ function snapPts(ig) { const r = pts(ig); for (const p of objSnapData().pts) if 
 function snapSegs(ig) { const e = objSnapData().segs; return e.length ? S.segs.concat(ig ? e.filter(s => !ig.has('o' + s.oid)) : e) : S.segs; }
 function objSnapShift(o, ig) { // przyciąganie narożników obiektu do punktów rysunku (px)
   let best = null, bd = 10; if (!ui.snapO) return null; const P = snapPts(ig);
-  for (const c of objCorners(o)) for (const p of P) { const d = Math.hypot(X(p.x) - X(c.x), Y(p.y) - Y(c.y)); if (d < bd) { bd = d; best = { dx: p.x - c.x, dy: p.y - c.y }; } }
+  const cs = objCorners(o);
+  for (const c of cs) for (const p of P) { const d = Math.hypot(X(p.x) - X(c.x), Y(p.y) - Y(c.y)); if (d < bd) { bd = d; best = { dx: p.x - c.x, dy: p.y - c.y }; } }
+  if (best) return best;
+  bd = 8; const SG = snapSegs(ig); // brak punktu – dociągnij narożnik do najbliższej rysowanej linii
+  for (const c of cs) for (const s of SG) { const q = closestOn(s, c), d = Math.hypot(X(q.x) - X(c.x), Y(q.y) - Y(c.y)); if (d < bd) { bd = d; best = { dx: q.x - c.x, dy: q.y - c.y }; } }
   return best;
 }
 function rotateObjAround(o, deg) { // obrót wokół środka obiektu
@@ -1168,7 +1173,7 @@ function placeObj() {
     for (const s of S.segs) { const q = closestOn(s, st.w), d = Math.hypot(X(q.x) - m.x, Y(q.y) - m.y); if (d < bd) { bd = d; best = { s, q }; } }
     let rot = pl.rot || 0, c = p;
     if (best) { c = best.q; let a = Math.atan2(best.s.b.y - best.s.a.y, best.s.b.x - best.s.a.x) / D2R; a = ((a % 180) + 180) % 180; if (Math.abs(a - 90) < 0.5) a = 90; if (a < 0.5 || a > 179.5) a = 0; rot = a + (pl.rot || 0); }
-    o.rot = rot; const cs = Math.cos(rot * D2R), sn = Math.sin(rot * D2R); o.x = c.x - (B.bw / 2 * cs - B.bh / 2 * sn); o.y = c.y - (B.bw / 2 * sn + B.bh / 2 * cs); o.onWall = !!best;
+    o.rot = rot; const cs = Math.cos(rot * D2R), sn = Math.sin(rot * D2R), k = o.sc || 1; o.x = c.x - k * (B.bw / 2 * cs - B.bh / 2 * sn); o.y = c.y - k * (B.bw / 2 * sn + B.bh / 2 * cs); o.onWall = !!best;
   } else {
     o.rot = pl.rot || 0; o.x = p.x; o.y = p.y; const sh = objSnapShift(o); if (sh) { o.x += sh.dx; o.y += sh.dy; }
   }
@@ -1209,7 +1214,7 @@ function svgDim(x1, y1, x2, y2, off, txt) { // wymiar poziomy (y1==y2) lub piono
   return s;
 }
 function protoOf(it, p) {
-  if (it.kind === 'op') return { k: 'op', ref: it.id, name: it.n, type: it.g === 'okna' ? 'okno' : 'drzwi', w: p.w, t: p.t, leaves: p.leaves, sw: p.sw, op: p.op, x: 0, y: 0, rot: 0 };
+  if (it.kind === 'op') return { k: 'op', ref: it.id, name: it.n, type: it.g === 'okna' ? 'okno' : 'drzwi', w: p.w, t: p.t, leaves: p.leaves, sw: p.sw, op: p.op, cut: !!p.cut, x: 0, y: 0, rot: 0 };
   return { k: 'el', ref: it.id, name: it.n, l: it.l, part: p.part || 1, w: it.w, h: it.h, fill: it.fill, st: it.st, cores: it.cores || null, view: p.view, nx: p.nx, ny: p.ny, jx: p.jx, jy: p.jy,
     je: { t: p.eT ? p.jeT : 0, r: p.eR ? p.jeT : 0, b: p.eB ? p.jeT : 0, l: p.eL ? p.jeT : 0 }, bond: !!p.bond, x: 0, y: 0, rot: 0 };
 }
@@ -1237,12 +1242,12 @@ function arrangementSvg(o, W, Hh) {
 function numIn(v, o) { const i = h('input', Object.assign({ type: 'number', step: 'any' }, o || {})); i.value = v; return i; }
 function objDialog(o) {
   modal('Obiekt: ' + o.name, body => {
-    const rot = numIn(Math.round((o.rot || 0) * 100) / 100, { step: 1 });
+    const rot = numIn(Math.round((o.rot || 0) * 100) / 100, { step: 1 }), scl = numIn(Math.round((o.sc || 1) * 10000) / 100, { min: 5, step: 'any' }), cut = h('input', { type: 'checkbox' }); cut.checked = !!o.cut;
     if (o.k === 'op') {
       const w = numIn(o.w, { min: 100 }), t = numIn(o.t, { min: 20 }), lv = h('select', {}, ...[1, 2, 3].map(n => h('option', { value: n, text: n }))), sw = h('select', {}, h('option', { value: 1, text: 'lewa' }), h('option', { value: -1, text: 'prawa' })), op = h('select', {}, h('option', { value: 1, text: 'na stronę +' }), h('option', { value: -1, text: 'na stronę −' }));
       lv.value = o.leaves || 1; sw.value = o.sw || 1; op.value = o.op || 1;
-      body.append(fld('Szerokość otworu [mm]', w), fld('Grubość muru [mm]', t), fld('Liczba skrzydeł', lv), ...(o.type === 'drzwi' ? [fld('Zawiasy', sw), fld('Kierunek otwierania', op)] : []), fld('Obrót [°]', rot));
-      return () => ({ w: Math.max(100, +w.value || o.w), t: Math.max(20, +t.value || o.t), leaves: +lv.value, sw: +sw.value, op: +op.value, rot: +rot.value || 0 });
+      body.append(fld('Szerokość otworu [mm]', w), fld('Grubość muru [mm]', t), fld('Liczba skrzydeł', lv), ...(o.type === 'drzwi' ? [fld('Zawiasy', sw), fld('Kierunek otwierania', op)] : []), fld('Obrót [°]', rot), fld('Skala symbolu [%]', scl), fld('Wytnij linie muru pod otworem (białe tło)', cut, 'chk'));
+      return () => ({ sc: Math.max(0.05, (+scl.value || 100) / 100), cut: cut.checked, w: Math.max(100, +w.value || o.w), t: Math.max(20, +t.value || o.t), leaves: +lv.value, sw: +sw.value, op: +op.value, rot: +rot.value || 0 });
     }
     const view = h('select', {}, h('option', { value: 'plan', text: 'Rzut (dł. × szer.)' }), h('option', { value: 'elev', text: 'Elewacja (dł. × wys.)' })); view.value = o.view;
     const part = h('select', {}, ...[[1, 'cały element'], [0.75, '¾ elementu'], [0.5, 'połówka (½)'], [0.25, '¼ elementu']].map(([v, n]) => h('option', { value: v, text: n }))); part.value = o.part || 1;
@@ -1253,8 +1258,8 @@ function objDialog(o) {
     for (const i of [part, view, nx, ny, jx, jy, eT, eR, eB, eL]) i.oninput = i.onchange = upd; upd();
     body.append(h('div', { text: o.l + ' × ' + o.w + ' × ' + o.h + ' mm (dł. × szer. × wys.)', style: 'font-weight:600' }), fld('Widok', view), fld('Część elementu (np. połówka do układania na zakładkę)', part), fld('Elementów wzdłuż długości (nx)', nx), fld('Rzędów (ny)', ny),
       fld('Spoina między elementami w rzędzie [mm]', jx), fld('Spoina między rzędami [mm]', jy), fld('Wiązanie – co drugi rząd przesunięty o ½', bond, 'chk'),
-      h('div', { text: 'Zaprawa na krawędziach zewnętrznych [mm] (0 = brak):', style: 'margin-top:6px;font-weight:600' }), fld('Góra', eT), fld('Prawa', eR), fld('Dół', eB), fld('Lewa', eL), fld('Obrót [°]', rot), info);
-    return () => ({ part: +part.value, view: view.value, nx: clamp(Math.round(+nx.value) || 1, 1, 400), ny: clamp(Math.round(+ny.value) || 1, 1, 400), jx: Math.max(0, +jx.value || 0), jy: Math.max(0, +jy.value || 0), bond: bond.checked, je: { t: Math.max(0, +eT.value || 0), r: Math.max(0, +eR.value || 0), b: Math.max(0, +eB.value || 0), l: Math.max(0, +eL.value || 0) }, rot: +rot.value || 0 });
+      h('div', { text: 'Zaprawa na krawędziach zewnętrznych [mm] (0 = brak):', style: 'margin-top:6px;font-weight:600' }), fld('Góra', eT), fld('Prawa', eR), fld('Dół', eB), fld('Lewa', eL), fld('Obrót [°]', rot), fld('Skala [%]', scl), info);
+    return () => ({ sc: Math.max(0.05, (+scl.value || 100) / 100), part: +part.value, view: view.value, nx: clamp(Math.round(+nx.value) || 1, 1, 400), ny: clamp(Math.round(+ny.value) || 1, 1, 400), jx: Math.max(0, +jx.value || 0), jy: Math.max(0, +jy.value || 0), bond: bond.checked, je: { t: Math.max(0, +eT.value || 0), r: Math.max(0, +eR.value || 0), b: Math.max(0, +eB.value || 0), l: Math.max(0, +eL.value || 0) }, rot: +rot.value || 0 });
   }, v => { push(); Object.assign(o, v); redraw(); });
 }
 function bomDialog() {
@@ -1309,7 +1314,7 @@ const cp = { q: '', g: 'all', sel: null, p: null, calc: { L: 6000, H: 2500, axis
   el.append(head, h('div', { class: 'cs' }, search, chips), h('div', { class: 'cb' }, h('div', { class: 'cl', id: 'cList' }), h('div', { class: 'cd', id: 'cDet' })),
     h('div', { class: 'ft' }, h('span', { text: 'Wymiary nominalne (dł. × szer. × wys.) – przed zakupem sprawdź kartę producenta.' }), h('button', { type: 'button', class: 'mini', id: 'cCust', text: '+ własny element' })));
   let drag = null; head.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; const r = el.getBoundingClientRect(); drag = { dx: e.clientX - r.left, dy: e.clientY - r.top }; head.setPointerCapture(e.pointerId); });
-  head.addEventListener('pointermove', e => { if (!drag) return; el.style.left = clamp(e.clientX - drag.dx, 0, Math.max(0, innerWidth - el.offsetWidth)) + 'px'; el.style.top = clamp(e.clientY - drag.dy, 0, innerHeight - 40) + 'px'; });
+  head.addEventListener('pointermove', e => { if (!drag) return; el.style.left = clamp(e.clientX - drag.dx, 90 - el.offsetWidth, innerWidth - 90) + 'px'; el.style.top = clamp(e.clientY - drag.dy, 0, innerHeight - 40) + 'px'; });
   head.addEventListener('pointerup', () => { drag = null; });
   $('cX').onclick = () => el.classList.remove('open'); $('cBom').onclick = bomDialog; $('cCust').onclick = customDialog;
   search.oninput = () => { cp.q = search.value; cpList(); };
@@ -1346,12 +1351,12 @@ function cpDetail() {
   D.append(tabs, dr);
   const form = h('div', { class: 'pg' }), F = (lab, key, o, kind) => { const l = h('label', {}, h('span', { text: lab })); let i; if (kind === 'chk') { l.className = 'k'; i = h('input', { type: 'checkbox' }); i.checked = !!p[key]; i.onchange = () => { p[key] = i.checked; upd(); }; l.prepend(i); l.querySelector('span').remove(); l.append(h('span', { text: lab })); return l; }
     if (kind === 'sel' || kind === 'selself') { i = h('select', {}); for (const [v, n] of o) i.append(h('option', { value: v, text: n })); i.value = p[key]; i.onchange = () => { p[key] = +i.value; upd(); }; } else { i = numIn(p[key], o || {}); i.oninput = i.onchange = () => { p[key] = parseFloat(String(i.value).replace(',', '.')) || 0; upd(); }; } l.append(i); return l; };
-  if (it.kind === 'op') form.append(F('Szerokość otworu [mm]', 'w', { min: 100 }), F('Grubość muru [mm]', 't', { min: 20 }), F('Liczba skrzydeł', 'leaves', [[1, '1'], [2, '2'], [3, '3']], 'sel'), ...(it.g === 'drzwi' ? [F('Zawiasy', 'sw', [[1, 'lewe'], [-1, 'prawe']], 'sel'), F('Otwieranie', 'op', [[1, 'na stronę +'], [-1, 'na stronę −']], 'sel')] : []));
+  if (it.kind === 'op') form.append(F('Szerokość otworu [mm]', 'w', { min: 100 }), F('Grubość muru [mm]', 't', { min: 20 }), F('Liczba skrzydeł', 'leaves', [[1, '1'], [2, '2'], [3, '3']], 'sel'), F('Wytnij mur pod otworem (białe tło)', 'cut', null, 'chk'), ...(it.g === 'drzwi' ? [F('Zawiasy', 'sw', [[1, 'lewe'], [-1, 'prawe']], 'sel'), F('Otwieranie', 'op', [[1, 'na stronę +'], [-1, 'na stronę −']], 'sel')] : []));
   else form.append(F('Część elementu', 'part', [[1, 'cały element'], [0.75, '¾ elementu'], [0.5, 'połówka (½) – na zakładkę'], [0.25, '¼ elementu']], 'sel'), F('Elementów w rzędzie (nx)', 'nx', { min: 1, step: 1 }), F('Rzędów (ny)', 'ny', { min: 1, step: 1 }), F('Spoina w rzędzie [mm]', 'jx', { min: 0 }), F('Spoina między rzędami [mm]', 'jy', { min: 0 }),
     F('Zaprawa na krawędzi: góra', 'eT', null, 'chk'), F('prawa', 'eR', null, 'chk'), F('dół', 'eB', null, 'chk'), F('lewa', 'eL', null, 'chk'), F('Grubość zaprawy na krawędziach [mm]', 'jeT', { min: 0 }), F('Wiązanie (co 2. rząd o ½)', 'bond', null, 'chk'));
   D.append(form);
   const go = h('button', { type: 'button', class: 'go', text: 'Wstaw na rysunek  ▸' }); go.onclick = () => { startPlace(protoOf(it, p)); };
-  D.append(go, h('div', { class: 'src', text: 'Po wstawieniu: R – obrót, F / X – zawiasy / kierunek (drzwi), Esc – koniec. Dwuklik na obiekcie – edycja.' }));
+  D.append(go, h('div', { class: 'src', text: 'Po wstawieniu: R – obrót, + / − – rozmiar, F / X – zawiasy / kierunek (drzwi), Esc – koniec. Dwuklik na obiekcie – edycja.' }));
   if (it.kind === 'el') { D.append(h('div', { style: 'font-weight:700;font-size:12px;margin:2px 0' }, 'Podgląd układu'), prev); D.append(cpCalcBlock(it, p)); }
   if (it.custom) { const del = h('button', { type: 'button', class: 'mini', text: 'Usuń element własny', style: 'margin-top:8px' }); del.onclick = () => { push(); S.custom = S.custom.filter(c => c.id !== it.id); cp.sel = null; cpList(); cpDetail(); }; D.append(del); }
   function upd() { dr.innerHTML = drawingSvg(it, p.view || 'plan', 420, it.kind === 'op' ? 210 : 200, true, p); if (it.kind === 'el') { prev.innerHTML = arrangementSvg(protoOf(it, p), 420, 170); cpCalcRes(it, p); } }
@@ -1576,6 +1581,7 @@ function distSeg(px, py, a, b) {
 function hit(px, py) {
   if (st.sel && st.sel.t === 'all') { const r = allRect(); if (r) { if (S.sheet.fmt !== 'free' && Math.abs(px - r.x1) < 10 && Math.abs(py - r.y1) < 10) return { t: 'allh' }; if (px >= r.x0 && px <= r.x1 && py >= r.y0 && py <= r.y1) return { t: 'all' }; } }
   if (S.sheet.fmt !== 'free' && S.sheet.tb && S.sheet.pw && st.sel && st.sel.t === 'tb') { const d = tbDims(), sh = S.sheet, k = sh.N * view.s; if (Math.abs(px - (X(sh.fx) + d.x * k)) < 10 && Math.abs(py - (Y(sh.fy) + d.y * k)) < 10) return { t: 'tbh' }; }
+  if (st.sel && st.sel.t === 'obj') { const o = S.objs.find(o => o.id === st.sel.id); if (o) { const B = objBox(o), hp = objXf(o)(B.bw, B.bh); if (Math.abs(X(hp[0]) - px) < 10 && Math.abs(Y(hp[1]) - py) < 10) return { t: 'objh', id: o.id }; } }
   for (const p of pts()) if (Math.hypot(X(p.x) - px, Y(p.y) - py) < 9) return { t: 'vtx', x: p.x, y: p.y };
   const w = toW(px, py), pad = 40;
   { const ho = hitObj(w); if (ho) return ho; }
@@ -1605,6 +1611,7 @@ function startDrag(h, px, py) {
     const s = getSeg(h.id), A = refsAt(s.a), B = refsAt(s.b), ids = new Set([...A.ids, ...B.ids]);
     Object.assign(d, { kind: 'seg', A: A.refs, B: B.refs, a0: { x: s.a.x, y: s.a.y }, b0: { x: s.b.x, y: s.b.y }, ids, lens: lensMap() });
   } else if (h.t === 'obj') { const o = S.objs.find(o => o.id === h.id); Object.assign(d, { kind: 'obj', o, x0: o.x, y0: o.y }); }
+  else if (h.t === 'objh') { const o = S.objs.find(o => o.id === h.id); Object.assign(d, { kind: 'objs', o, sc0: o.sc || 1, d0: Math.max(1e-6, Math.hypot(st.w.x - o.x, st.w.y - o.y)) }); }
   else if (h.t === 'text') { const t = S.texts.find(t => t.id === h.id); Object.assign(d, { kind: 'text', t, x0: t.x, y0: t.y }); }
   else if (h.t === 'dim') { const t = S.dims.find(t => t.id === h.id); Object.assign(d, { kind: 'dim', t, c0: t.c }); }
   else if (h.t === 'tbh') { Object.assign(d, { kind: 'tbs', rx: tbRectW().x1 }); }
@@ -1624,6 +1631,7 @@ function doDrag() {
     if (ui.snapG) { if (Math.abs(n.x) > .999) mx = gridSnap(d.a0.x + mx) - d.a0.x; else if (Math.abs(n.y) > .999) my = gridSnap(d.a0.y + my) - d.a0.y; else if (!isO) { mx = gridSnap(d.a0.x + mx) - d.a0.x; my = gridSnap(d.a0.y + my) - d.a0.y; } }
     for (const r of d.A) { r.x = d.a0.x + mx; r.y = d.a0.y + my; } for (const r of d.B) { r.x = d.b0.x + mx; r.y = d.b0.y + my; } updDm(d.ids, d.lens);
   } else if (d.kind === 'obj') { const o = d.o; o.x = d.x0 + dx; o.y = d.y0 + dy; if (ui.snapG && !ui.snapL) { o.x = gridSnap(o.x); o.y = gridSnap(o.y); } const sh = objSnapShift(o, new Set(['o' + o.id])); if (sh) { o.x += sh.dx; o.y += sh.dy; } else if (ui.snapG) { o.x = gridSnap(o.x); o.y = gridSnap(o.y); } }
+  else if (d.kind === 'objs') { const o = d.o; o.sc = clamp(Math.round(d.sc0 * Math.hypot(st.w.x - o.x, st.w.y - o.y) / d.d0 * 1000) / 1000, 0.05, 50); if (Math.abs(o.sc - 1) < 0.03) o.sc = 1; }
   else if (d.kind === 'text') { let x = d.x0 + dx, y = d.y0 + dy; if (ui.snapG) { x = gridSnap(x); y = gridSnap(y); } d.t.x = x; d.t.y = y; }
   else if (d.kind === 'dim') { const u = dimU(d.t.mode, d.t.p1, d.t.p2), n = { x: -u.y, y: u.x }; d.t.c = d.c0 + dx * n.x + dy * n.y; }
   else if (d.kind === 'allm') { const sh = S.sheet; if (sh.fmt === 'free' || !sh.pw) return; const dxs = st.mouse.x - d.lx, dys = st.mouse.y - d.ly; d.lx = st.mouse.x; d.ly = st.mouse.y;
@@ -1763,7 +1771,7 @@ function updateStatus() {
     : st.buf !== '' ? 'Długość: ' + st.buf + ' mm – Enter lub klik zatwierdza, Backspace kasuje' : 'Klik = punkt końcowy • wpisz długość w mm + Enter • Shift – tryb 90°/swobodny • Esc/PPM – koniec ciągu';
   else if (ui.tool === 'dim') t = !st.dimP1 ? 'Wymiarowanie: kliknij pierwszy punkt.' : !st.dimP2 ? 'Kliknij drugi punkt (domyślnie pod kątem 90°, Shift – swobodnie).' : 'Kliknij, aby ustawić położenie linii wymiarowej. Tab – rodzaj wymiaru.';
   else if (ui.tool === 'text') t = 'Kliknij miejsce, w którym ma się pojawić pole tekstowe.';
-  else if (ui.tool === 'place') t = 'Wstawianie obiektu: klik – wstaw • R – obróć o 90° • okna/drzwi przyciągają się do linii ściany (F/X – zawiasy/kierunek) • narożniki przyciągają się do punktów • Esc – koniec.';
+  else if (ui.tool === 'place') t = 'Wstawianie obiektu: klik – wstaw • R – obróć o 90° • + / − – rozmiar • okna/drzwi przyciągają się do linii ściany (F/X – zawiasy/kierunek) • narożniki przyciągają się do punktów • Esc – koniec.';
   else if (ui.tool === 'area') t = 'Kliknij wewnątrz zamkniętego konturu, aby oznaczyć go jako przestrzeń lub ścianę (kontur musi być domknięty).';
   else t = 'Przeciągnij wierzchołek (kwadracik) lub odcinek. Enter/dwuklik – długość ręczna. M – rodzaj wymiaru, F – strona, Del – usuń.';
   if (ui.tool === 'sel' && st.sel && st.sel.t === 'all') t = S.sheet.fmt === 'free' ? 'Cały rysunek zaznaczony. Wybierz format arkusza (A4–A0), aby go skalować i pozycjonować na kartce.' : 'Cały rysunek: przeciągnij – przesuń na kartce, uchwyt w prawym dolnym rogu – skala, strzałki – precyzyjnie (Shift = 5 mm), Enter – wartości liczbowe.';
@@ -1795,7 +1803,7 @@ cv.addEventListener('pointermove', e => {
   if (st.pan) { view.ox = st.pan.ox + e.clientX - st.pan.x; view.oy = st.pan.oy + e.clientY - st.pan.y; }
   else if (st.drag) doDrag();
   else if (ui.tool === 'area') st.hoverFace = faceAt(st.w);
-  else if (ui.tool === 'sel') { const hh = hit(st.mouse.x, st.mouse.y); cv.style.cursor = hh ? (hh.t === 'vtx' ? 'move' : hh.t === 'tbh' || hh.t === 'allh' ? 'nwse-resize' : hh.t === 'all' ? 'move' : 'pointer') : 'default'; }
+  else if (ui.tool === 'sel') { const hh = hit(st.mouse.x, st.mouse.y); cv.style.cursor = hh ? (hh.t === 'vtx' ? 'move' : hh.t === 'tbh' || hh.t === 'allh' || hh.t === 'objh' ? 'nwse-resize' : hh.t === 'all' ? 'move' : 'pointer') : 'default'; }
   redraw();
 });
 cv.addEventListener('pointerup', () => { if (st.pan) { st.pan = null; cv.style.cursor = st.space ? 'grab' : 'crosshair'; } if (st.drag) endDrag(); redraw(); });
@@ -1823,8 +1831,10 @@ window.addEventListener('keydown', e => {
   if (ui.tool === 'place' && st.place) { const pl = st.place;
     if (e.key === 'Escape') { st.place = null; setTool('sel'); return; }
     if (k === 'r') { pl.rot = ((pl.rot || 0) + 90) % 360; redraw(); return; }
+    if (e.key.length === 1 && '+=-_'.includes(e.key)) { pl.proto.sc = clamp((pl.proto.sc || 1) * ('+='.includes(e.key) ? 1.1 : 1 / 1.1), 0.05, 50); redraw(); return; }
     if (k === 'f' && pl.proto.k === 'op') { pl.proto.sw = -(pl.proto.sw || 1); if (cp.p && cp.sel === pl.proto.ref) { cp.p.sw = pl.proto.sw; cpDetail(); } redraw(); return; }
     if (k === 'x' && pl.proto.k === 'op') { pl.proto.op = -(pl.proto.op || 1); if (cp.p && cp.sel === pl.proto.ref) { cp.p.op = pl.proto.op; cpDetail(); } redraw(); return; } }
+  if (st.sel && st.sel.t === 'obj' && e.key.length === 1 && '+=-_'.includes(e.key)) { const o = S.objs.find(o => o.id === st.sel.id); if (o) { push(); o.sc = clamp((o.sc || 1) * ('+='.includes(e.key) ? 1.1 : 1 / 1.1), 0.05, 50); redraw(); } return; }
   if (st.sel && st.sel.t === 'obj' && k === 'r') { const o = S.objs.find(o => o.id === st.sel.id); if (o) { push(); rotateObjAround(o, e.shiftKey ? -90 : 90); redraw(); } return; }
   if (e.key === 'Escape') { if (st.buf !== '') st.buf = ''; else if (st.start) finishChain(); else if (st.dimP1) { st.dimP1 = null; st.dimP2 = null; } else st.sel = null; redraw(); return; }
   if (st.sel && st.sel.t === 'all' && e.key.startsWith('Arrow') && S.sheet.fmt !== 'free' && S.sheet.pw) { e.preventDefault(); const sh = S.sheet, stp = e.shiftKey ? 5 : 1;
@@ -1900,7 +1910,7 @@ $('bColor').onclick = e => { e.stopPropagation(); ribShow(); const p = $('pal'),
 function save() { try { localStorage.setItem(KEY, JSON.stringify({ S, view, ui })); } catch (_) {} }
 function restore() {
   try { const j = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem('plan2d_v2') || 'null');
-    if (j && j.S) { S = migrate(j.S); if (j.view) view = j.view; if (j.ui) for (const k of ['ortho', 'snapL', 'snapG', 'step', 'grid', 'showDims', 'dimMode', 'color', 'pinned', 'snapO']) if (k in j.ui) ui[k] = j.ui[k]; } } catch (_) {}
+    if (j && j.S) { S = migrate(j.S); if (j.view) view = j.view; if (j.ui) for (const k of ['ortho', 'snapL', 'snapG', 'step', 'grid', 'showDims', 'dimMode', 'color', 'snapO']) if (k in j.ui) ui[k] = j.ui[k]; if (j.ui.pinV === 2) ui.pinned = !!j.ui.pinned; } } catch (_) {}
 }
 setInterval(save, 2000); window.addEventListener('beforeunload', save);
 restore(); if (ui.pinned) { ui.pinned = false; setPin(true, false); } syncUI(); new ResizeObserver(resize).observe($('wrap')); resize();

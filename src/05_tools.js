@@ -54,6 +54,7 @@ function distSeg(px, py, a, b) {
 function hit(px, py) {
   if (st.sel && st.sel.t === 'all') { const r = allRect(); if (r) { if (S.sheet.fmt !== 'free' && Math.abs(px - r.x1) < 10 && Math.abs(py - r.y1) < 10) return { t: 'allh' }; if (px >= r.x0 && px <= r.x1 && py >= r.y0 && py <= r.y1) return { t: 'all' }; } }
   if (S.sheet.fmt !== 'free' && S.sheet.tb && S.sheet.pw && st.sel && st.sel.t === 'tb') { const d = tbDims(), sh = S.sheet, k = sh.N * view.s; if (Math.abs(px - (X(sh.fx) + d.x * k)) < 10 && Math.abs(py - (Y(sh.fy) + d.y * k)) < 10) return { t: 'tbh' }; }
+  if (st.sel && st.sel.t === 'obj') { const o = S.objs.find(o => o.id === st.sel.id); if (o) { const B = objBox(o), hp = objXf(o)(B.bw, B.bh); if (Math.abs(X(hp[0]) - px) < 10 && Math.abs(Y(hp[1]) - py) < 10) return { t: 'objh', id: o.id }; } }
   for (const p of pts()) if (Math.hypot(X(p.x) - px, Y(p.y) - py) < 9) return { t: 'vtx', x: p.x, y: p.y };
   const w = toW(px, py), pad = 40;
   { const ho = hitObj(w); if (ho) return ho; }
@@ -83,6 +84,7 @@ function startDrag(h, px, py) {
     const s = getSeg(h.id), A = refsAt(s.a), B = refsAt(s.b), ids = new Set([...A.ids, ...B.ids]);
     Object.assign(d, { kind: 'seg', A: A.refs, B: B.refs, a0: { x: s.a.x, y: s.a.y }, b0: { x: s.b.x, y: s.b.y }, ids, lens: lensMap() });
   } else if (h.t === 'obj') { const o = S.objs.find(o => o.id === h.id); Object.assign(d, { kind: 'obj', o, x0: o.x, y0: o.y }); }
+  else if (h.t === 'objh') { const o = S.objs.find(o => o.id === h.id); Object.assign(d, { kind: 'objs', o, sc0: o.sc || 1, d0: Math.max(1e-6, Math.hypot(st.w.x - o.x, st.w.y - o.y)) }); }
   else if (h.t === 'text') { const t = S.texts.find(t => t.id === h.id); Object.assign(d, { kind: 'text', t, x0: t.x, y0: t.y }); }
   else if (h.t === 'dim') { const t = S.dims.find(t => t.id === h.id); Object.assign(d, { kind: 'dim', t, c0: t.c }); }
   else if (h.t === 'tbh') { Object.assign(d, { kind: 'tbs', rx: tbRectW().x1 }); }
@@ -102,6 +104,7 @@ function doDrag() {
     if (ui.snapG) { if (Math.abs(n.x) > .999) mx = gridSnap(d.a0.x + mx) - d.a0.x; else if (Math.abs(n.y) > .999) my = gridSnap(d.a0.y + my) - d.a0.y; else if (!isO) { mx = gridSnap(d.a0.x + mx) - d.a0.x; my = gridSnap(d.a0.y + my) - d.a0.y; } }
     for (const r of d.A) { r.x = d.a0.x + mx; r.y = d.a0.y + my; } for (const r of d.B) { r.x = d.b0.x + mx; r.y = d.b0.y + my; } updDm(d.ids, d.lens);
   } else if (d.kind === 'obj') { const o = d.o; o.x = d.x0 + dx; o.y = d.y0 + dy; if (ui.snapG && !ui.snapL) { o.x = gridSnap(o.x); o.y = gridSnap(o.y); } const sh = objSnapShift(o, new Set(['o' + o.id])); if (sh) { o.x += sh.dx; o.y += sh.dy; } else if (ui.snapG) { o.x = gridSnap(o.x); o.y = gridSnap(o.y); } }
+  else if (d.kind === 'objs') { const o = d.o; o.sc = clamp(Math.round(d.sc0 * Math.hypot(st.w.x - o.x, st.w.y - o.y) / d.d0 * 1000) / 1000, 0.05, 50); if (Math.abs(o.sc - 1) < 0.03) o.sc = 1; }
   else if (d.kind === 'text') { let x = d.x0 + dx, y = d.y0 + dy; if (ui.snapG) { x = gridSnap(x); y = gridSnap(y); } d.t.x = x; d.t.y = y; }
   else if (d.kind === 'dim') { const u = dimU(d.t.mode, d.t.p1, d.t.p2), n = { x: -u.y, y: u.x }; d.t.c = d.c0 + dx * n.x + dy * n.y; }
   else if (d.kind === 'allm') { const sh = S.sheet; if (sh.fmt === 'free' || !sh.pw) return; const dxs = st.mouse.x - d.lx, dys = st.mouse.y - d.ly; d.lx = st.mouse.x; d.ly = st.mouse.y;
@@ -241,7 +244,7 @@ function updateStatus() {
     : st.buf !== '' ? 'Długość: ' + st.buf + ' mm – Enter lub klik zatwierdza, Backspace kasuje' : 'Klik = punkt końcowy • wpisz długość w mm + Enter • Shift – tryb 90°/swobodny • Esc/PPM – koniec ciągu';
   else if (ui.tool === 'dim') t = !st.dimP1 ? 'Wymiarowanie: kliknij pierwszy punkt.' : !st.dimP2 ? 'Kliknij drugi punkt (domyślnie pod kątem 90°, Shift – swobodnie).' : 'Kliknij, aby ustawić położenie linii wymiarowej. Tab – rodzaj wymiaru.';
   else if (ui.tool === 'text') t = 'Kliknij miejsce, w którym ma się pojawić pole tekstowe.';
-  else if (ui.tool === 'place') t = 'Wstawianie obiektu: klik – wstaw • R – obróć o 90° • okna/drzwi przyciągają się do linii ściany (F/X – zawiasy/kierunek) • narożniki przyciągają się do punktów • Esc – koniec.';
+  else if (ui.tool === 'place') t = 'Wstawianie obiektu: klik – wstaw • R – obróć o 90° • + / − – rozmiar • okna/drzwi przyciągają się do linii ściany (F/X – zawiasy/kierunek) • narożniki przyciągają się do punktów • Esc – koniec.';
   else if (ui.tool === 'area') t = 'Kliknij wewnątrz zamkniętego konturu, aby oznaczyć go jako przestrzeń lub ścianę (kontur musi być domknięty).';
   else t = 'Przeciągnij wierzchołek (kwadracik) lub odcinek. Enter/dwuklik – długość ręczna. M – rodzaj wymiaru, F – strona, Del – usuń.';
   if (ui.tool === 'sel' && st.sel && st.sel.t === 'all') t = S.sheet.fmt === 'free' ? 'Cały rysunek zaznaczony. Wybierz format arkusza (A4–A0), aby go skalować i pozycjonować na kartce.' : 'Cały rysunek: przeciągnij – przesuń na kartce, uchwyt w prawym dolnym rogu – skala, strzałki – precyzyjnie (Shift = 5 mm), Enter – wartości liczbowe.';
@@ -273,7 +276,7 @@ cv.addEventListener('pointermove', e => {
   if (st.pan) { view.ox = st.pan.ox + e.clientX - st.pan.x; view.oy = st.pan.oy + e.clientY - st.pan.y; }
   else if (st.drag) doDrag();
   else if (ui.tool === 'area') st.hoverFace = faceAt(st.w);
-  else if (ui.tool === 'sel') { const hh = hit(st.mouse.x, st.mouse.y); cv.style.cursor = hh ? (hh.t === 'vtx' ? 'move' : hh.t === 'tbh' || hh.t === 'allh' ? 'nwse-resize' : hh.t === 'all' ? 'move' : 'pointer') : 'default'; }
+  else if (ui.tool === 'sel') { const hh = hit(st.mouse.x, st.mouse.y); cv.style.cursor = hh ? (hh.t === 'vtx' ? 'move' : hh.t === 'tbh' || hh.t === 'allh' || hh.t === 'objh' ? 'nwse-resize' : hh.t === 'all' ? 'move' : 'pointer') : 'default'; }
   redraw();
 });
 cv.addEventListener('pointerup', () => { if (st.pan) { st.pan = null; cv.style.cursor = st.space ? 'grab' : 'crosshair'; } if (st.drag) endDrag(); redraw(); });
@@ -301,8 +304,10 @@ window.addEventListener('keydown', e => {
   if (ui.tool === 'place' && st.place) { const pl = st.place;
     if (e.key === 'Escape') { st.place = null; setTool('sel'); return; }
     if (k === 'r') { pl.rot = ((pl.rot || 0) + 90) % 360; redraw(); return; }
+    if (e.key.length === 1 && '+=-_'.includes(e.key)) { pl.proto.sc = clamp((pl.proto.sc || 1) * ('+='.includes(e.key) ? 1.1 : 1 / 1.1), 0.05, 50); redraw(); return; }
     if (k === 'f' && pl.proto.k === 'op') { pl.proto.sw = -(pl.proto.sw || 1); if (cp.p && cp.sel === pl.proto.ref) { cp.p.sw = pl.proto.sw; cpDetail(); } redraw(); return; }
     if (k === 'x' && pl.proto.k === 'op') { pl.proto.op = -(pl.proto.op || 1); if (cp.p && cp.sel === pl.proto.ref) { cp.p.op = pl.proto.op; cpDetail(); } redraw(); return; } }
+  if (st.sel && st.sel.t === 'obj' && e.key.length === 1 && '+=-_'.includes(e.key)) { const o = S.objs.find(o => o.id === st.sel.id); if (o) { push(); o.sc = clamp((o.sc || 1) * ('+='.includes(e.key) ? 1.1 : 1 / 1.1), 0.05, 50); redraw(); } return; }
   if (st.sel && st.sel.t === 'obj' && k === 'r') { const o = S.objs.find(o => o.id === st.sel.id); if (o) { push(); rotateObjAround(o, e.shiftKey ? -90 : 90); redraw(); } return; }
   if (e.key === 'Escape') { if (st.buf !== '') st.buf = ''; else if (st.start) finishChain(); else if (st.dimP1) { st.dimP1 = null; st.dimP2 = null; } else st.sel = null; redraw(); return; }
   if (st.sel && st.sel.t === 'all' && e.key.startsWith('Arrow') && S.sheet.fmt !== 'free' && S.sheet.pw) { e.preventDefault(); const sh = S.sheet, stp = e.shiftKey ? 5 : 1;
@@ -378,7 +383,7 @@ $('bColor').onclick = e => { e.stopPropagation(); ribShow(); const p = $('pal'),
 function save() { try { localStorage.setItem(KEY, JSON.stringify({ S, view, ui })); } catch (_) {} }
 function restore() {
   try { const j = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem('plan2d_v2') || 'null');
-    if (j && j.S) { S = migrate(j.S); if (j.view) view = j.view; if (j.ui) for (const k of ['ortho', 'snapL', 'snapG', 'step', 'grid', 'showDims', 'dimMode', 'color', 'pinned', 'snapO']) if (k in j.ui) ui[k] = j.ui[k]; } } catch (_) {}
+    if (j && j.S) { S = migrate(j.S); if (j.view) view = j.view; if (j.ui) for (const k of ['ortho', 'snapL', 'snapG', 'step', 'grid', 'showDims', 'dimMode', 'color', 'snapO']) if (k in j.ui) ui[k] = j.ui[k]; if (j.ui.pinV === 2) ui.pinned = !!j.ui.pinned; } } catch (_) {}
 }
 setInterval(save, 2000); window.addEventListener('beforeunload', save);
 restore(); if (ui.pinned) { ui.pinned = false; setPin(true, false); } syncUI(); new ResizeObserver(resize).observe($('wrap')); resize();

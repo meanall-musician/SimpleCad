@@ -28,7 +28,7 @@ function migrate(d) {
 
 let S = newDoc();
 let view = { s: 0.1, ox: 80, oy: 80 };
-const ui = { tool: 'line', ortho: true, snapL: true, snapG: true, step: 100, grid: true, showDims: true, dimMode: 'auto', color: '#000000', pinned: false, snapO: true };
+const ui = { tool: 'line', ortho: true, snapL: true, snapG: true, step: 100, grid: true, showDims: true, dimMode: 'auto', color: '#000000', pinned: true, pinV: 2, snapO: true };
 const st = { start: null, chainStart: null, buf: '', mouse: { x: 0, y: 0 }, w: { x: 0, y: 0 }, shift: false, space: false,
              pan: null, dimP1: null, dimP2: null, dimEff: 'a', sel: null, drag: null, hoverFace: null, snap: null, place: null };
 let W = 800, H = 600, dpr = 1, raf = 0, hist = [], redo = [];
